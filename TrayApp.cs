@@ -36,11 +36,13 @@ namespace PingMon
             _ackItem = new ToolStripMenuItem("Acknowledge all", null, (s, e) => AcknowledgeAll());
             _pauseItem = new ToolStripMenuItem("Pause monitoring", null, (s, e) => TogglePause());
             _autostartItem = new ToolStripMenuItem("Start with Windows", null, (s, e) => ToggleAutostart());
+            var clearLogItem = new ToolStripMenuItem("Clear log", null, (s, e) => ClearLog());
             _menu = new ContextMenuStrip();
             _menu.Items.Add(_ackItem);
             _menu.Items.Add(_pauseItem);
             _menu.Items.Add("Add host...", null, (s, e) => AddHost());
             _menu.Items.Add("Open log", null, (s, e) => OpenLog());
+            _menu.Items.Add(clearLogItem);
             _menu.Items.Add("Reload config", null, (s, e) => ReloadConfig());
             _menu.Items.Add(new ToolStripSeparator());
             _menu.Items.Add(_autostartItem);
@@ -55,6 +57,7 @@ namespace PingMon
                 _ackItem.Enabled = !_paused && HasUnackedDown();
                 _pauseItem.Text = _paused ? "Resume monitoring" : "Pause monitoring";
                 _autostartItem.Checked = Autostart.IsEnabled;
+                clearLogItem.Enabled = File.Exists(StateLog.Path);
             };
 
             _tray = new NotifyIcon
@@ -85,22 +88,24 @@ namespace PingMon
         {
             _config = Config.Load(Config.IniPath);
             _states.Clear();
-            foreach (var address in _config.Hosts)
+            foreach (var hostSpec in _config.Hosts)
             {
-                var st = new HostState(Config.ToHostConfig(_config, address));
+                var st = new HostState(Config.ToHostConfig(_config, hostSpec));
+                st.Enabled = !Config.IsDisabled(hostSpec);
                 _states.Add(st);
-                StartMonitor(st);
+                if (st.Enabled)
+                    StartMonitor(st);
             }
             Refresh();
         }
 
-        // Starts (or restarts) one host's monitor. Does nothing while paused.
+        // Starts (or restarts) one host's monitor. Does nothing while paused or disabled.
         private void StartMonitor(HostState st)
         {
             var mon = new HostMonitor(st);
             mon.StateChanged += OnStateChanged;
             _monitors[st] = mon;
-            if (!_paused) mon.Start(_lifetime.Token);
+            if (!_paused && st.Enabled) mon.Start(_lifetime.Token);
         }
 
         private void StopMonitor(HostState st)
@@ -123,7 +128,7 @@ namespace PingMon
         {
             try
             {
-                _config.Hosts = _states.Select(h => h.Cfg.Address).ToList();
+                _config.Hosts = _states.Select(h => Config.MakeHostSpec(h.Cfg.Address, h.Enabled)).ToList();
                 Config.Save(Config.IniPath, _config);
             }
             catch (Exception ex)
@@ -159,8 +164,9 @@ namespace PingMon
         private string Tooltip()
         {
             if (_paused) return "pingmon: paused";
-            int up = _states.Count(h => h.State == State.Up);
-            string text = string.Format("pingmon: {0}/{1} up", up, _states.Count);
+            var enabledStates = _states.Where(h => h.Enabled).ToList();
+            int up = enabledStates.Count(h => h.State == State.Up);
+            string text = string.Format("pingmon: {0}/{1} up", up, enabledStates.Count);
             return text.Length > 63 ? text.Substring(0, 63) : text;
         }
 
@@ -210,6 +216,22 @@ namespace PingMon
             Process.Start(StateLog.Path);
         }
 
+        private void ClearLog()
+        {
+            try
+            {
+                if (File.Exists(StateLog.Path))
+                {
+                    File.Delete(StateLog.Path);
+                    ShowBalloon("Log cleared");
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowBalloon("Could not clear log: " + ex.Message);
+            }
+        }
+
         // Reads pingmon.ini without writing it. Keeps state for hosts still listed.
         private void ReloadConfig()
         {
@@ -234,13 +256,16 @@ namespace PingMon
             _states.Clear();
 
             _config = fresh;
-            foreach (var address in fresh.Hosts)
+            foreach (var hostSpec in fresh.Hosts)
             {
+                string address = Config.GetAddress(hostSpec);
+                bool enabled = !Config.IsDisabled(hostSpec);
                 HostState keep = old.Find(h => string.Equals(h.Cfg.Address, address, StringComparison.OrdinalIgnoreCase));
-                var st = keep ?? new HostState(Config.ToHostConfig(fresh, address));
-                st.Cfg = Config.ToHostConfig(fresh, address);
+                var st = keep ?? new HostState(Config.ToHostConfig(fresh, hostSpec));
+                st.Cfg = Config.ToHostConfig(fresh, hostSpec);
+                st.Enabled = enabled;
                 _states.Add(st);
-                StartMonitor(st);
+                if (enabled) StartMonitor(st);
             }
             Refresh();
 
@@ -248,7 +273,7 @@ namespace PingMon
                 (fresh.Skipped.Count > 0 ? " Ignored: " + string.Join(", ", fresh.Skipped.ToArray()) : ""));
         }
 
-        // Adds a host to the running list and writes the config.
+        // Adds a host to the running list and writes the config. Also allows changing settings.
         private void AddHost()
         {
             if (_addForm != null && !_addForm.IsDisposed)
@@ -257,7 +282,7 @@ namespace PingMon
                 return;
             }
 
-            _addForm = new AddHostForm(IsListed);
+            _addForm = new AddHostForm(IsListed, _config.IntervalSec, _config.TimeoutMs, _config.Buffer);
             if (_addForm.ShowDialog() != DialogResult.OK)
             {
                 _addForm.Dispose();
@@ -267,9 +292,47 @@ namespace PingMon
 
             List<string> added = _addForm.Hosts;
             List<string> listed = _addForm.AlreadyListed;
+            int? newInterval = _addForm.IntervalSec;
+            int? newTimeout = _addForm.TimeoutMs;
+            int? newBuffer = _addForm.Buffer;
             _addForm.Dispose();
             _addForm = null;
 
+            // Apply settings changes if any
+            bool settingsChanged = false;
+            if (newInterval.HasValue && newInterval.Value != _config.IntervalSec)
+            {
+                _config.IntervalSec = newInterval.Value;
+                settingsChanged = true;
+            }
+            if (newTimeout.HasValue && newTimeout.Value != _config.TimeoutMs)
+            {
+                _config.TimeoutMs = newTimeout.Value;
+                settingsChanged = true;
+            }
+            if (newBuffer.HasValue && newBuffer.Value != _config.Buffer)
+            {
+                _config.Buffer = newBuffer.Value;
+                settingsChanged = true;
+            }
+
+            // If settings changed, update all existing hosts' configs and restart monitors
+            if (settingsChanged)
+            {
+                foreach (var st in _states)
+                {
+                    st.Cfg = Config.ToHostConfig(_config, Config.MakeHostSpec(st.Cfg.Address, st.Enabled));
+                    // Restart monitor to apply new settings
+                    HostMonitor mon;
+                    if (_monitors.TryGetValue(st, out mon))
+                    {
+                        mon.Stop();
+                        if (!_paused && st.Enabled) mon.Start(_lifetime.Token);
+                    }
+                }
+            }
+
+            // Add new hosts
             foreach (string host in added)
             {
                 var st = new HostState(Config.ToHostConfig(_config, host));
@@ -277,12 +340,18 @@ namespace PingMon
                 StartMonitor(st);
                 StateLog.Write(host, "ADDED", null);
             }
+
             SaveConfig();
             Refresh();
             if (_widget != null && !_widget.IsDisposed) _widget.Relayout();
 
-            if (listed.Count > 0)
+            // Show appropriate message
+            if (added.Count > 0 && listed.Count > 0)
                 ShowBalloon("Added " + added.Count + " host(s). Already listed: " + string.Join(", ", listed.ToArray()));
+            else if (added.Count > 0)
+                ShowBalloon("Added " + added.Count + " host(s).");
+            else if (settingsChanged)
+                ShowBalloon("Settings updated.");
         }
 
         private bool IsListed(string host)
@@ -390,6 +459,24 @@ namespace PingMon
             if (_widget != null && !_widget.IsDisposed) _widget.Relayout();
         }
 
+        // Toggles a host's enabled state, starts or stops monitoring, and writes the config.
+        private void ToggleHostEnabled(HostState st)
+        {
+            st.Enabled = !st.Enabled;
+            if (st.Enabled)
+            {
+                StartMonitor(st);
+                StateLog.Write(st.Cfg.Address, "ENABLED", null);
+            }
+            else
+            {
+                StopMonitor(st);
+                StateLog.Write(st.Cfg.Address, "DISABLED", null);
+            }
+            SaveConfig();
+            Refresh();
+        }
+
         private void ShowBalloon(string text)
         {
             _tray.BalloonTipTitle = "pingmon";
@@ -409,6 +496,7 @@ namespace PingMon
 
             _widget = new WidgetForm(_states, _paused);
             _widget.RemoveRequested += RemoveHost;
+            _widget.ToggleEnabledRequested += ToggleHostEnabled;
             _widget.FormClosed += OnWidgetClosed;
             _widget.PlaceAt(_config.WidgetPos);
             _widget.Show();

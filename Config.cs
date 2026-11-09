@@ -12,14 +12,16 @@ namespace PingMon
         public int IntervalSec;
         public int TimeoutMs;
         public int Threshold;
+        public int Buffer = 32; // Ping payload size in bytes
     }
 
-    // Running values. Hosts are stored as normalized strings.
+    // Running values. Hosts are stored as normalized strings, prefaced with '-' if disabled.
     public class AppConfig
     {
         public int IntervalSec = 5;
         public int TimeoutMs = 1000;
         public int Threshold = 3;
+        public int Buffer = 32;
         public List<string> Hosts = new List<string>();
         public Point? WidgetPos;
         // Host lines from the file that were ignored when loading.
@@ -53,6 +55,7 @@ namespace PingMon
             sb.Append("interval=").Append(cfg.IntervalSec).Append("\r\n");
             sb.Append("timeout=").Append(cfg.TimeoutMs).Append("\r\n");
             sb.Append("threshold=").Append(cfg.Threshold).Append("\r\n");
+            sb.Append("buffer=").Append(cfg.Buffer).Append("\r\n");
             sb.Append("\r\n");
             sb.Append("[hosts]\r\n");
             foreach (string h in cfg.Hosts) sb.Append(h).Append("\r\n");
@@ -114,6 +117,7 @@ namespace PingMon
 
         // Reads the file into running values. Tolerates inline comments and unknown lines.
         // Invalid or duplicate host lines are reported in Skipped.
+        // Hosts prefaced with '-' are disabled.
         public static AppConfig Load(string path)
         {
             var cfg = new AppConfig();
@@ -141,11 +145,20 @@ namespace PingMon
                 }
                 else if (section == "hosts")
                 {
+                    // Check for disabled prefix
+                    string lineToCheck = line;
+                    bool disabled = false;
+                    if (line.StartsWith("-"))
+                    {
+                        lineToCheck = line.Substring(1);
+                        disabled = true;
+                    }
+
                     string host;
-                    if (!TryNormalizeHost(line, out host) || !seen.Add(host))
+                    if (!TryNormalizeHost(lineToCheck, out host) || !seen.Add(host))
                         cfg.Skipped.Add(line);
                     else
-                        cfg.Hosts.Add(host);
+                        cfg.Hosts.Add(disabled ? "-" + host : host);
                 }
                 else if (section == "widget")
                 {
@@ -163,19 +176,42 @@ namespace PingMon
             cfg.IntervalSec = Clamp(Get(settings, "interval", 5), 1, 3600);
             cfg.TimeoutMs = Clamp(Get(settings, "timeout", 1000), 500, 10000);
             cfg.Threshold = Clamp(Get(settings, "threshold", 3), 1, 100);
+            cfg.Buffer = Clamp(Get(settings, "buffer", 32), 0, 65500);
             return cfg;
         }
 
         // Builds a HostConfig for one address using the running settings.
-        public static HostConfig ToHostConfig(AppConfig cfg, string address)
+        // hostSpec may be prefixed with '-' for disabled hosts (only used for address lookup).
+        public static HostConfig ToHostConfig(AppConfig cfg, string addressSpec)
         {
+            // Strip the disabled prefix if present
+            string address = addressSpec.StartsWith("-") ? addressSpec.Substring(1) : addressSpec;
             return new HostConfig
             {
                 Address = address,
                 IntervalSec = cfg.IntervalSec,
                 TimeoutMs = cfg.TimeoutMs,
-                Threshold = cfg.Threshold
+                Threshold = cfg.Threshold,
+                Buffer = cfg.Buffer
             };
+        }
+
+        // Extracts just the address from a host specification (with optional '-' prefix)
+        public static string GetAddress(string hostSpec)
+        {
+            return hostSpec.StartsWith("-") ? hostSpec.Substring(1) : hostSpec;
+        }
+
+        // Checks if a host specification is marked as disabled
+        public static bool IsDisabled(string hostSpec)
+        {
+            return hostSpec.StartsWith("-");
+        }
+
+        // Creates a host specification with the enabled/disabled flag
+        public static string MakeHostSpec(string address, bool enabled)
+        {
+            return enabled ? address : "-" + address;
         }
 
         private static string StripComment(string raw)

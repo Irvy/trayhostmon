@@ -28,6 +28,8 @@ namespace PingMon
 
         // Raised when the user clicks the remove button of a row.
         public event Action<HostState> RemoveRequested;
+        // Raised when the user toggles enable/disable for a host.
+        public event Action<HostState> ToggleEnabledRequested;
 
         public WidgetForm(List<HostState> states, bool paused)
         {
@@ -107,9 +109,18 @@ namespace PingMon
         {
             if (e.Button != MouseButtons.Left) return;
             int row = RowAt(e.Location);
-            if (row < 0 || !OnRemoveButton(e.Location)) return;
-            var handler = RemoveRequested;
-            if (handler != null) handler(_states[row]);
+            if (row < 0) return;
+
+            if (OnRemoveButton(e.Location))
+            {
+                var handler = RemoveRequested;
+                if (handler != null) handler(_states[row]);
+            }
+            else
+            {
+                var toggleHandler = ToggleEnabledRequested;
+                if (toggleHandler != null) toggleHandler(_states[row]);
+            }
         }
 
         // Recalculates the size after the host list changed, keeping the top-left corner.
@@ -200,16 +211,18 @@ namespace PingMon
                     Brush xBrush = (row == _hoverRow) ? red : dim;
                     g.DrawString("\u00d7", font, xBrush, Pad, y - 2);
 
-                    Color dotColor = _paused ? Color.FromArgb(90, 90, 90) : DotColor(h);
+                    // Dim disabled hosts similar to paused state
+                    bool hostDimmed = _paused || !h.Enabled;
+                    Color dotColor = hostDimmed ? Color.FromArgb(90, 90, 90) : DotColor(h);
                     using (var dot = new SolidBrush(dotColor))
                         g.FillEllipse(dot, Pad + RowIndent, y + 5, 10, 10);
 
-                    Brush text = _paused ? dim : white;
-                    Brush sub = _paused ? dim : grey;
+                    Brush text = hostDimmed ? dim : white;
+                    Brush sub = hostDimmed ? dim : grey;
                     g.DrawString(h.Cfg.Address, font, text, Pad + RowIndent + 16, y);
                     string rtt = h.LastRttMs < 0 ? "\u2014" : h.LastRttMs + " ms";
                     g.DrawString(rtt, font, sub, Pad + RowIndent + 160, y);
-                    g.DrawString(StatusText(h, _paused), font, sub, Pad + RowIndent + 230, y);
+                    g.DrawString(StatusText(h, _paused, !h.Enabled), font, sub, Pad + RowIndent + 230, y);
 
                     y += RowHeight;
                     row++;
@@ -236,8 +249,9 @@ namespace PingMon
             }
         }
 
-        private static string StatusText(HostState h, bool paused)
+        private static string StatusText(HostState h, bool paused, bool disabled)
         {
+            if (disabled) return "disabled";
             if (!paused) return StateWord(h);
             string asOf = h.LastCheck == DateTime.MinValue ? "\u2014" : h.LastCheck.ToString("HH:mm:ss");
             return StateWord(h) + " \u00b7 as of " + asOf;

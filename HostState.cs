@@ -16,18 +16,20 @@ namespace PingMon
         public bool Acked;
         public int FailCount;
         public long LastRttMs = -1;
+        public bool Enabled = true;
 
         public HostState(HostConfig cfg)
         {
             Cfg = cfg;
         }
 
-        // Unknown hosts are ignored: they don't change the tray icon.
+        // Unknown hosts and disabled hosts are ignored: they don't change the tray icon.
         public static Overall Worst(IEnumerable<HostState> hosts)
         {
             bool anyDownAcked = false;
             foreach (var h in hosts)
             {
+                if (!h.Enabled) continue;
                 if (h.State == State.Down)
                 {
                     if (!h.Acked) return Overall.DownUnacked;
