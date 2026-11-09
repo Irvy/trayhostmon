@@ -10,7 +10,7 @@ Tray icon, menu and monitor ownership.
 - Shift+click or right-click on About... opens a small debug form with "Memory info" and "Force cleanup". See `Diagnostics.md`.
 - About...: shows a message box (`PingMon` / `A simple host ping utility` / `Made by Claude/Cline/irvy in 2026`). An invisible topmost owner keeps it in front; a flag stops a second copy opening.
 - Remove host: from the widget's `×`. Stops that host's monitor, removes it, logs `REMOVED`, writes the config. No confirmation.
-- Clear log: deletes `pingmon.log` (if it exists) and shows balloon tip. Available from tray menu when log exists.
+- Clear log: deletes `pingmon.log` (if it exists), then writes a fresh `LOG CLEARED` record so the file always exists afterward. Shows balloon tip. Available from tray menu when log exists.
 - Enable/disable host: clicking a host's row in the widget (not the `×` button) toggles the enabled state. Disabling stops the monitor and logs `DISABLED`. Enabling starts the monitor (if not paused) and logs `ENABLED`. Disabled hosts are dimmed in the widget and don't affect the tray icon state.
 - Config writes: on add, remove, enable/disable, widget move (widget closed after a drag) and exit (when the widget was moved). Each write regenerates the whole file from running values. Disabled hosts are saved with a leading `-` prefix.
 - Reload config: reads the file only (no write). Keeps state for hosts still listed; stops monitors of removed hosts. Restores enabled/disabled state from config. Skipped lines are shown in a balloon tip.

@@ -130,15 +130,15 @@ namespace PingMon
             Invalidate();
         }
 
-        // Makes the whole window draggable with the left button (acts as a title bar).
-        // The remove-button column stays clickable; the rest of the window acts as a title bar.
+        // The header (when paused) and padding stay draggable (act as a title bar);
+        // each host row is clickable (remove button + enable/disable toggle).
         protected override void WndProc(ref Message m)
         {
             base.WndProc(ref m);
             if (m.Msg == WM_NCHITTEST && m.Result == (IntPtr)HTCLIENT)
             {
                 Point p = PointToClient(new Point((int)m.LParam & 0xFFFF, ((int)m.LParam >> 16) & 0xFFFF));
-                if (!(RowAt(p) >= 0 && OnRemoveButton(p)))
+                if (RowAt(p) < 0)
                     m.Result = (IntPtr)HTCAPTION;
             }
         }

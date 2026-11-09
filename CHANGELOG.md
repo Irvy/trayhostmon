@@ -1,5 +1,11 @@
 # Change Log
 
+## Follow-up Fixes
+
+1. **Widget click-to-toggle:** the `WM_NCHITTEST` handling now returns `HTCAPTION` only for the header/padding, keeping the host rows as the clickable client area so enable/disable toggling works. `ToggleHostEnabled` also invalidates the widget immediately for instant repaint.
+2. **Clear log:** after deleting `pingmon.log`, `ClearLog` writes a fresh `LOG CLEARED` record so the file is recreated immediately.
+3. **Add host form:** layout is now a compact horizontal row of `period` / `timeout` / `size` inputs beneath the host field. The Cancel button was removed (the window close button cancels). The host input was lowered to clear its label, and the OK button was moved up to align with the settings input row, trimming the empty bottom space.
+
 ## Changes Implemented
 
 ### 1. Host Enable/Disable Feature

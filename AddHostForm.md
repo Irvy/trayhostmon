@@ -10,10 +10,11 @@ Dialog for adding a host to the running list and editing settings.
 - `List<string> AlreadyListed`: valid entries that were already listed.
 - `int? IntervalSec`, `int? TimeoutMs`, `int? Buffer`: setting values (null means unchanged from current).
 - Input is split on spaces, commas, semicolons or tabs. Each entry is checked with `Config.TryNormalizeHost`.
-- Settings inputs:
-  - Ping interval (seconds): 1-3600, default 5
-  - Timeout (ms): 500-10000, default 1000
-  - Payload size (bytes): 0-65500, default 32 (0 = use system default)
+- Settings inputs (compact row of three below the host input, each with a label beneath):
+  - `period` — Ping interval (seconds): 1-3600, default 5
+  - `timeout` — Timeout (ms): 500-10000, default 1000
+  - `size` — Payload size (bytes): 0-65500, default 32 (0 = use system default)
+- The OK button sits at the right edge, in line with the settings input row. There is no Cancel button; close the window (X) to cancel. `OK` is the accept button.
 - OK (or Enter) validates settings and messages, and the dialog stays open:
   - invalid interval/timeout/buffer: shows validation error
   - hosts entered but all are invalid: `invalid: <entries>` (nothing is added)

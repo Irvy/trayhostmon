@@ -36,87 +36,43 @@ namespace PingMon
             ShowInTaskbar = false;
             TopMost = true;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(380, 250);
+            ClientSize = new Size(380, 118);
             Font = new Font("Segoe UI", 9f);
-
-            int y = 12;
 
             var label = new Label
             {
-                Text = "IP addresses or hostnames (space, comma or semicolon separated):",
-                Location = new Point(12, y)
-            };
-            y += 22;
-            _input = new TextBox { Location = new Point(12, y), Width = 356 };
-            y += 34;
-
-            // Settings row 1: Interval
-            var intervalLabel = new Label
-            {
-                Text = "Ping interval (seconds):",
-                Location = new Point(12, y),
+                Text = "Add hosts (separate with , ; or space)",
+                Location = new Point(12, 8),
                 AutoSize = true
             };
-            _intervalInput = new TextBox
-            {
-                Location = new Point(160, y - 2),
-                Width = 60,
-                Text = currentInterval.ToString()
-            };
-            y += 28;
+            _input = new TextBox { Location = new Point(12, 32), Width = 356 };
 
-            // Settings row 2: Timeout
-            var timeoutLabel = new Label
-            {
-                Text = "Timeout (ms):",
-                Location = new Point(12, y),
-                AutoSize = true
-            };
-            _timeoutInput = new TextBox
-            {
-                Location = new Point(160, y - 2),
-                Width = 60,
-                Text = currentTimeout.ToString()
-            };
-            y += 28;
+            // Three compact inputs in a row with labels beneath; OK aligns with the inputs on the right.
+            _intervalInput = new TextBox { Location = new Point(12, 66), Width = 60, Text = currentInterval.ToString() };
+            _timeoutInput = new TextBox { Location = new Point(88, 66), Width = 60, Text = currentTimeout.ToString() };
+            _bufferInput = new TextBox { Location = new Point(164, 66), Width = 60, Text = currentBuffer.ToString() };
 
-            // Settings row 3: Buffer
-            var bufferLabel = new Label
-            {
-                Text = "Payload size (bytes, 0=default):",
-                Location = new Point(12, y),
-                AutoSize = true
-            };
-            _bufferInput = new TextBox
-            {
-                Location = new Point(230, y - 2),
-                Width = 60,
-                Text = currentBuffer.ToString()
-            };
-            y += 28;
+            var periodLabel = new Label { Text = "period", Location = new Point(12, 90), AutoSize = true };
+            var timeoutLabel = new Label { Text = "timeout", Location = new Point(88, 90), AutoSize = true };
+            var bufferLabel = new Label { Text = "size", Location = new Point(164, 90), AutoSize = true };
 
-            _message = new Label { Location = new Point(12, y), Size = new Size(356, 16), ForeColor = Color.FromArgb(218, 54, 51) };
-            y += 24;
-
-            var ok = new Button { Text = "OK", Location = new Point(212, y), Size = new Size(75, 23) };
-            var cancel = new Button { Text = "Cancel", Location = new Point(293, y), Size = new Size(75, 23) };
+            _message = new Label { Location = new Point(12, 118), Size = new Size(356, 16), ForeColor = Color.FromArgb(218, 54, 51) };
+            var ok = new Button { Text = "OK", Location = new Point(293, 66), Size = new Size(75, 23) };
 
             ok.Click += (s, e) => Accept();
-            cancel.Click += (s, e) => Close();
             AcceptButton = ok;
-            CancelButton = cancel;
+            // No Cancel button or CancelButton: the window close button is the only way to cancel.
 
             Controls.Add(label);
             Controls.Add(_input);
-            Controls.Add(intervalLabel);
             Controls.Add(_intervalInput);
-            Controls.Add(timeoutLabel);
             Controls.Add(_timeoutInput);
-            Controls.Add(bufferLabel);
             Controls.Add(_bufferInput);
+            Controls.Add(periodLabel);
+            Controls.Add(timeoutLabel);
+            Controls.Add(bufferLabel);
             Controls.Add(_message);
             Controls.Add(ok);
-            Controls.Add(cancel);
 
             Shown += (s, e) => _input.Focus();
         }

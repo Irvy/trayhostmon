@@ -221,10 +221,9 @@ namespace PingMon
             try
             {
                 if (File.Exists(StateLog.Path))
-                {
                     File.Delete(StateLog.Path);
-                    ShowBalloon("Log cleared");
-                }
+                StateLog.Write("pingmon", "LOG CLEARED", null);
+                ShowBalloon("Log cleared");
             }
             catch (Exception ex)
             {
@@ -475,6 +474,7 @@ namespace PingMon
             }
             SaveConfig();
             Refresh();
+            if (_widget != null && !_widget.IsDisposed) _widget.Invalidate();
         }
 
         private void ShowBalloon(string text)
