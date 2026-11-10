@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace PingMon
+namespace TrayHostMon
 {
     public class WidgetForm : Form
     {
@@ -11,6 +11,9 @@ namespace PingMon
         private const int Pad = 8;
         private const int HeaderHeight = 18;
         private const int WM_NCHITTEST = 0x0084;
+        private const int WM_NCLBUTTONDBLCLK = 0x00A0;
+        private const int WM_SYSCOMMAND = 0x0112;
+        private const int SC_MAXIMIZE = 0xF030;
         private const int HTCLIENT = 1;
         private const int HTCAPTION = 2;
         private const int RemoveWidth = 14;
@@ -94,6 +97,17 @@ namespace PingMon
             return p.X >= Pad && p.X <= Pad + RemoveWidth;
         }
 
+        // The state dot sits just right of the remove button, at (Pad + RowIndent, rowTop + 5), 10x10.
+        private bool OnStateDot(Point p)
+        {
+            int row = RowAt(p);
+            if (row < 0) return false;
+            int top = Pad + (_paused ? HeaderHeight : 0) + row * RowHeight;
+            Rectangle r = new Rectangle(Pad + RowIndent, top + 5, 10, 10);
+            r.Inflate(2, 2); // small margin for easier clicking
+            return r.Contains(p);
+        }
+
         private void UpdateHover(Point p)
         {
             int row = RowAt(p);
@@ -116,7 +130,7 @@ namespace PingMon
                 var handler = RemoveRequested;
                 if (handler != null) handler(_states[row]);
             }
-            else
+            else if (OnStateDot(e.Location))
             {
                 var toggleHandler = ToggleEnabledRequested;
                 if (toggleHandler != null) toggleHandler(_states[row]);
@@ -131,16 +145,41 @@ namespace PingMon
         }
 
         // The header (when paused) and padding stay draggable (act as a title bar);
-        // each host row is clickable (remove button + enable/disable toggle).
+        // the remove button and state dot are clickable; the rest of the row drags.
         protected override void WndProc(ref Message m)
         {
+            // A double-click on the caption area would maximize a borderless window.
+            // Swallow it so the widget can only be moved, never maximized.
+            if (m.Msg == WM_NCLBUTTONDBLCLK && (int)m.WParam == HTCAPTION)
+                return;
+
+            // Second guard: reject any maximize system command outright.
+            if (m.Msg == WM_SYSCOMMAND && ((int)m.WParam & 0xFFF0) == SC_MAXIMIZE)
+                return;
+
             base.WndProc(ref m);
             if (m.Msg == WM_NCHITTEST && m.Result == (IntPtr)HTCLIENT)
             {
                 Point p = PointToClient(new Point((int)m.LParam & 0xFFFF, ((int)m.LParam >> 16) & 0xFFFF));
-                if (RowAt(p) < 0)
+                if (RowAt(p) < 0 || (!OnRemoveButton(p) && !OnStateDot(p)))
                     m.Result = (IntPtr)HTCAPTION;
             }
+        }
+
+        // Removes WS_MAXIMIZEBOX and WS_THICKFRAME so Windows can never maximize
+        // or resize the borderless widget, even via the caption double-click path.
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            IntPtr hwnd = Handle;
+            long style = IntPtr.Size == 8
+                ? (long)NativeMethods.GetWindowLongPtr64(hwnd, NativeMethods.GWL_STYLE)
+                : NativeMethods.GetWindowLong32(hwnd, NativeMethods.GWL_STYLE);
+            style &= ~(long)(NativeMethods.WS_MAXIMIZEBOX | NativeMethods.WS_THICKFRAME);
+            if (IntPtr.Size == 8)
+                NativeMethods.SetWindowLongPtr64(hwnd, NativeMethods.GWL_STYLE, new IntPtr(style));
+            else
+                NativeMethods.SetWindowLong32(hwnd, NativeMethods.GWL_STYLE, (int)style);
         }
 
         protected override void OnMove(EventArgs e)

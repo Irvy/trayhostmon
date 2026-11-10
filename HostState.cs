@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PingMon
+namespace TrayHostMon
 {
     public enum State { Unknown, Up, Down }
 

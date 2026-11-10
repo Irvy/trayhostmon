@@ -8,7 +8,7 @@ using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
-namespace PingMon
+namespace TrayHostMon
 {
     public class TrayApp : ApplicationContext
     {
@@ -73,7 +73,7 @@ namespace PingMon
             SystemEvents.SessionEnding += OnSessionEnding;
 
             Config.EnsureExists();
-            StateLog.Write("pingmon", "START", null);
+            StateLog.Write("TrayHostMon", "START", null);
             LoadAndStart();
             if (_config.Skipped.Count > 0) ShowSkippedNotice();
         }
@@ -123,7 +123,7 @@ namespace PingMon
             foreach (var mon in _monitors.Values) mon.Stop();
         }
 
-        // Writes the running values to pingmon.ini.
+        // Writes the running values to TrayHostMon.ini.
         private void SaveConfig()
         {
             try
@@ -163,10 +163,10 @@ namespace PingMon
 
         private string Tooltip()
         {
-            if (_paused) return "pingmon: paused";
+            if (_paused) return "TrayHostMon: paused";
             var enabledStates = _states.Where(h => h.Enabled).ToList();
             int up = enabledStates.Count(h => h.State == State.Up);
-            string text = string.Format("pingmon: {0}/{1} up", up, enabledStates.Count);
+            string text = string.Format("TrayHostMon: {0}/{1} up", up, enabledStates.Count);
             return text.Length > 63 ? text.Substring(0, 63) : text;
         }
 
@@ -180,18 +180,19 @@ namespace PingMon
         {
             StopMonitors();
             _paused = true;
-            StateLog.Write("pingmon", "PAUSE", null);
+            StateLog.Write("TrayHostMon", "PAUSE", null);
             Refresh();
         }
 
         private void ResumeMonitoring()
         {
             _paused = false;
-            StateLog.Write("pingmon", "RESUME", null);
-            // Restart every monitor, resetting the fail counts.
+            StateLog.Write("TrayHostMon", "RESUME", null);
+            // Restart every enabled monitor, resetting the fail counts.
             foreach (var h in _states) h.FailCount = 0;
             foreach (var h in _states.ToList())
             {
+                if (!h.Enabled) continue;
                 StopMonitor(h);
                 StartMonitor(h);
             }
@@ -222,7 +223,7 @@ namespace PingMon
             {
                 if (File.Exists(StateLog.Path))
                     File.Delete(StateLog.Path);
-                StateLog.Write("pingmon", "LOG CLEARED", null);
+                StateLog.Write("TrayHostMon", "LOG CLEARED", null);
                 ShowBalloon("Log cleared");
             }
             catch (Exception ex)
@@ -231,7 +232,7 @@ namespace PingMon
             }
         }
 
-        // Reads pingmon.ini without writing it. Keeps state for hosts still listed.
+        // Reads TrayHostMon.ini without writing it. Keeps state for hosts still listed.
         private void ReloadConfig()
         {
             AppConfig fresh;
@@ -379,8 +380,8 @@ namespace PingMon
             {
                 owner.Show();
                 MessageBox.Show(owner,
-                    "PingMon\r\nA simple host ping utility\r\nMade by Claude/Cline/irvy in 2026",
-                    "About pingmon",
+                    "TrayHostMon\r\nA simple tray host ping monitor\r\nMade by Claude/Deepseek/Cline and Irvy in 2026",
+                    "About TrayHostMon",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
             }
@@ -422,7 +423,7 @@ namespace PingMon
             })
             using (var dlg = new Form
             {
-                Text = "pingmon - debug",
+                Text = "TrayHostMon - debug",
                 StartPosition = FormStartPosition.CenterParent,
                 FormBorderStyle = FormBorderStyle.FixedDialog,
                 MaximizeBox = false,
@@ -434,8 +435,8 @@ namespace PingMon
                 var mem = new Button { Text = "Memory info", Location = new Point(12, 12), Width = 95, Height = 27 };
                 var force = new Button { Text = "Force cleanup", Location = new Point(12, 45), Width = 95, Height = 27 };
                 var close = new Button { Text = "Close", Location = new Point(133, 45), Width = 75, Height = 27, DialogResult = DialogResult.Cancel };
-                mem.Click += (s, e) => MessageBox.Show(dlg, Diagnostics.Snapshot(), "pingmon - memory", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                force.Click += (s, e) => MessageBox.Show(dlg, Diagnostics.ForceCleanup(), "pingmon - memory", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                mem.Click += (s, e) => MessageBox.Show(dlg, Diagnostics.Snapshot(), "TrayHostMon - memory", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                force.Click += (s, e) => MessageBox.Show(dlg, Diagnostics.ForceCleanup(), "TrayHostMon - memory", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 dlg.Controls.Add(mem);
                 dlg.Controls.Add(force);
                 dlg.Controls.Add(close);
@@ -479,7 +480,7 @@ namespace PingMon
 
         private void ShowBalloon(string text)
         {
-            _tray.BalloonTipTitle = "pingmon";
+            _tray.BalloonTipTitle = "TrayHostMon";
             _tray.BalloonTipText = text;
             _tray.ShowBalloonTip(3000);
         }
@@ -537,7 +538,7 @@ namespace PingMon
 
             _lifetime.Cancel();
             StopMonitors();
-            StateLog.Write("pingmon", _paused ? "STOP (paused)" : "STOP", null);
+            StateLog.Write("TrayHostMon", _paused ? "STOP (paused)" : "STOP", null);
             if (_widget != null && !_widget.IsDisposed) _widget.Close();
             _tray.Visible = false;
             ExitThread();

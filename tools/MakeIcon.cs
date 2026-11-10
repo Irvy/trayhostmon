@@ -6,8 +6,8 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
 
-// Build-time helper: renders the pingmon tray-state circle into an .ico file,
-// using the same drawing as PingMon.IconFactory.Make (transparent background,
+// Build-time helper: renders the TrayHostMon tray-state circle into an .ico file,
+// using the same drawing as TrayHostMon.IconFactory.Make (transparent background,
 // anti-aliased filled circle + rgb(60,60,60) outline). At size 16 the geometry
 // is identical to IconFactory (margin 1, diameter 13, pen 1).
 //
@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 //
 //   makeicon.exe [state] [out.ico] [sizes]
 //     state   allup (default) | downunacked | downacked | paused
-//     out.ico target file, default "pingmon.ico" (relative to the cwd)
+//     out.ico target file, default "TrayHostMon.ico" (relative to the cwd)
 //     sizes   comma list, default "16,32,48"
 static class MakeIcon
 {
@@ -29,7 +29,7 @@ static class MakeIcon
     private static int Main(string[] args)
     {
         string state = args.Length > 0 ? args[0].ToLowerInvariant() : "allup";
-        string outPath = args.Length > 1 ? args[1] : "pingmon.ico";
+        string outPath = args.Length > 1 ? args[1] : "TrayHostMon.ico";
 
         int[] sizes;
         try
@@ -42,7 +42,7 @@ static class MakeIcon
             return 2;
         }
 
-        // Same palette as PingMon.IconFactory.Get / PingMon.Overall.
+        // Same palette as TrayHostMon.IconFactory.Get / TrayHostMon.Overall.
         Color color;
         switch (state)
         {

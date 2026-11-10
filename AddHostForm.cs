@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace PingMon
+namespace TrayHostMon
 {
     public class AddHostForm : Form
     {
@@ -29,7 +29,7 @@ namespace PingMon
             Hosts = new List<string>();
             AlreadyListed = new List<string>();
 
-            Text = "pingmon - add host / settings";
+            Text = "TrayHostMon - add host / settings";
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;

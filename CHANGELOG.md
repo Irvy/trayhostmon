@@ -1,10 +1,26 @@
 # Change Log
 
+## Remove console build remnants
+
+The `#if CONSOLE` build mode (used only for agentic testing) was removed. `Program.cs` now has a single tray-app `Main` with no conditional compilation, and the `TrayHostMon-console.exe` artifact reference was dropped from `.gitignore`.
+
+## Rename: pingmon → TrayHostMon
+
+The app was renamed from `pingmon` to `TrayHostMon` (there were too many other projects already called "pingmon"). This touched:
+- Namespace `PingMon` → `TrayHostMon` across all `.cs` files.
+- Runtime files: `pingmon.exe` → `TrayHostMon.exe`, `pingmon.ini` → `TrayHostMon.ini`, `pingmon.log` → `TrayHostMon.log`, `pingmon.lnk` → `TrayHostMon.lnk`, icon `pingmon.ico` → `TrayHostMon.ico`.
+- Single-instance mutex: `Local\pingmon` → `Local\TrayHostMon`.
+- User-facing strings: About dialog, tooltip, balloon title, dialog captions, log owner name.
+- About text now: `TrayHostMon` / `A simple tray host ping monitor` / `Made by Claude/Deepseek/Cline and Irvy in 2026`.
+- `.gitignore` updated to the new artifact names.
+
 ## Follow-up Fixes
 
 1. **Widget click-to-toggle:** the `WM_NCHITTEST` handling now returns `HTCAPTION` only for the header/padding, keeping the host rows as the clickable client area so enable/disable toggling works. `ToggleHostEnabled` also invalidates the widget immediately for instant repaint.
-2. **Clear log:** after deleting `pingmon.log`, `ClearLog` writes a fresh `LOG CLEARED` record so the file is recreated immediately.
+2. **Clear log:** after deleting `TrayHostMon.log`, `ClearLog` writes a fresh `LOG CLEARED` record so the file is recreated immediately.
 3. **Add host form:** layout is now a compact horizontal row of `period` / `timeout` / `size` inputs beneath the host field. The Cancel button was removed (the window close button cancels). The host input was lowered to clear its label, and the OK button was moved up to align with the settings input row, trimming the empty bottom space.
+4. **Widget maximize on double-click:** the widget now swallows `WM_NCLBUTTONDBLCLK` when the hit target is the caption, so double-clicking the padding/header can no longer maximize the borderless window. Dragging and row clicks are unaffected. A follow-up hardening added two more layers: `OnHandleCreated` strips the `WS_MAXIMIZEBOX`/`WS_THICKFRAME` style bits (so the window physically cannot maximize/resize), and `WM_SYSCOMMAND`/`SC_MAXIMIZE` is rejected in `WndProc`.
+5. **Widget click targets narrowed:** clicking is now limited to the `×` remove button and the state dot only. The rest of the row (name, latency, status) and padding are draggable again, restoring smooth dragging while keeping remove/toggle reachable.
 
 ## Changes Implemented
 
@@ -25,7 +41,7 @@
 **TrayApp Changes:**
 - `ToggleHostEnabled()` method handles enable/disable toggling
 - Enabled hosts get monitors started/stopped on toggle
-- Logs `ENABLED` / `DISABLED` state changes to `pingmon.log`
+- Logs `ENABLED` / `DISABLED` state changes to `TrayHostMon.log`
 - Config saves include the `-` prefix for disabled hosts
 
 **Config Changes:**
@@ -43,7 +59,7 @@
   - **Ping interval (seconds)**: 1-3600, default 5
   - **Timeout (ms)**: 500-10000, default 1000
   - **Payload size (bytes)**: 0-65500, default 32 (0 = system default)
-- Form title changed to "pingmon - add host / settings"
+- Form title changed to "TrayHostMon - add host / settings"
 - Form height increased to accommodate new controls
 
 **Behavior:**
@@ -70,7 +86,7 @@
 
 **What Changed:**
 - Added "Clear log" menu item in tray menu between "Open log" and "Reload config"
-- Menu item is enabled only when `pingmon.log` exists
+- Menu item is enabled only when `TrayHostMon.log` exists
 
 **TrayApp Changes:**
 - `ClearLog()` method:

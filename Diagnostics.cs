@@ -2,7 +2,7 @@
 using System;
 using System.Diagnostics;
 
-namespace PingMon
+namespace TrayHostMon
 {
     // Debug-only memory figures. Compiled only by 'build.cmd debug'.
     public static class Diagnostics
