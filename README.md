@@ -1,67 +1,83 @@
 # TrayHostMon
 
-A tiny, windowless Windows tray application that monitors IPv4 connectivity of a
-small list of remote hosts by pinging them in the background.
+A small tray app for Windows that quietly pings a handful of hosts and shows you,
+at a glance, whether anything's gone down.
 
-The tray icon shows the *worst* state across all monitored hosts, so a single
-glance tells you whether anything is down. Left-click opens a floating widget
-with per-host detail; state changes are written to a CSV log.
+The tray icon always reflects the worst state of your hosts, so you don't have to
+think about it — green means everything's fine. Left-click it and a little floating
+panel drops down with the details: each host's status, its latency, and how long it's
+been down.
 
-## Features
+## Why it exists
 
-- **Tray icon** reflecting the worst host state (all up / ack'd down / unack'd down / paused)
-- **Floating widget** showing per host: status dot, latency, and "down since" time
-- **Enable/disable individual hosts** by clicking their status dot (disabled hosts don't affect the tray state)
-- **Add/remove hosts** at runtime, with configurable ping interval, timeout and payload size
-- **Acknowledge all** to turn a red "down-unacknowledged" into an orange "down-acknowledged" state
-- **Pause/resume** monitoring
-- **Clear log**, open log, and reload config from the tray menu
-- **Start with Windows** (shortcut in `shell:startup`)
-- **Single instance** via a named mutex
-- **CSV log** of state changes and app lifecycle events
+I wanted something tiny that sits in the system tray and pings a few servers
+without needing an installer, admin rights, or a web dashboard. Just one exe, a
+plain-text config, and a CSV log.
 
-## Requirements
+## What it does
 
-- Windows 10 1903+ or Windows 11
-- .NET Framework 4.8 (built into Windows, nothing to install)
+- A tray icon that's **green** when everything's up, **orange** when something's
+  down but acknowledged, **red** when something's down and you haven't acknowledged
+  it, and **grey** while paused.
+- A floating widget (left-click the tray icon) listing each host with a status dot,
+  its latency, and its "down since" time.
+- Click a host's status dot to turn monitoring for that host on or off. Disabled
+  hosts are dimmed and don't affect the tray icon.
+- Add and remove hosts on the fly, each with its own ping interval, timeout, and
+  payload size — or change the defaults for all of them.
+- **Acknowledge all** when something's down, to turn the red into a calmer orange
+  once you know about it.
+- Pause/resume, open or clear the log, and reload the config, all from the tray menu.
+- Start with Windows via a shortcut in `shell:startup`.
+- Only one copy runs at a time.
+- State changes and app events are written to a CSV log.
 
-No installer, no admin rights, no NuGet dependencies — it's a single self-contained exe.
+## What you need
 
-## Build
+- Windows 10 (1903 or newer) or Windows 11.
+- .NET Framework 4.8 — already part of Windows, nothing to install.
 
-Run `build.cmd` from the project root. It invokes `csc.exe` directly (no SDK needed):
+No installer, no admin rights, no NuGet packages. It's one self-contained
+`TrayHostMon.exe`.
+
+## Building it
+
+From the project root, run:
 
 ```
 build.cmd
 ```
 
-This produces `TrayHostMon.exe`.
+That's it — the script calls `csc.exe` directly, so you don't need a full SDK. It
+also rebuilds the tray icon from the same drawing code the app uses at runtime
+(see `tools/`). The result is `TrayHostMon.exe`.
 
-## Usage
+## Using it
 
-1. Put `TrayHostMon.exe` anywhere and run it.
-2. On first run it creates `TrayHostMon.ini` (a sample config) next to the exe.
-3. Edit hosts via the tray menu's **Add host...** (or edit `TrayHostMon.ini` and use **Reload config**).
+1. Drop `TrayHostMon.exe` wherever you like and run it.
+2. The first run writes a sample `TrayHostMon.ini` next to the exe.
+3. Add hosts from the tray menu (**Add host…**), or edit the `.ini` by hand and
+   pick **Reload config**.
 
-## Files (next to the exe)
+## Files it keeps (next to the exe)
 
-- `TrayHostMon.ini` — settings and host list (INI format)
-- `TrayHostMon.log` — CSV of state changes and lifecycle events
+- `TrayHostMon.ini` — settings and the host list, in INI format.
+- `TrayHostMon.log` — a CSV of state changes and app lifecycle events.
 
 ## Configuration
 
-`TrayHostMon.ini`:
+`TrayHostMon.ini` looks like this:
 
 ```ini
 [settings]
 interval=5        ; seconds between pings
 timeout=1000      ; ping timeout in ms
-threshold=3       ; consecutive failures before a host is "down"
+threshold=3       ; consecutive failures before a host counts as down
 buffer=32         ; ping payload size in bytes (0 = system default)
 
 [hosts]
 google.com
--localhost  ; leading '-' disables the host
+-localhost        ; a leading '-' disables that host
 ```
 
 ## License
