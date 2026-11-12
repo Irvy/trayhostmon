@@ -22,7 +22,22 @@ if errorlevel 1 (
   exit /b 1
 )
 
-:: --- 3. Build the app ------------------------------------------------------
+:: --- 3. Stop any running build-dir instance --------------------------------
+:: shutdown.exe finds a running TrayHostMon.exe, and only if its exe is the one
+:: in this directory sets the shutdown event and waits for it to exit, so the
+:: app build below can overwrite the file.
+"%CSC%" /nologo /target:exe /out:tools\shutdown.exe tools\ShutdownInstance.cs /r:System.dll
+if errorlevel 1 (
+  echo BUILD FAILED: shutdown.exe
+  exit /b 1
+)
+tools\shutdown.exe
+if errorlevel 1 (
+  echo BUILD FAILED: could not stop running instance
+  exit /b 1
+)
+
+:: --- 4. Build the app ------------------------------------------------------
 "%CSC%" /nologo /optimize+ /define:DEBUG_MEM /target:winexe /win32icon:TrayHostMon.ico /out:TrayHostMon.exe %REFS% %SRC%
 if errorlevel 1 (
   echo BUILD FAILED

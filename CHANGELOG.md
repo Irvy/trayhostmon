@@ -2,6 +2,15 @@
 
 All notable changes to TrayHostMon, newest first.
 
+## [1.0.3] - 2026-11-13
+
+### Added
+- `build.cmd` now stops a running instance cleanly before rebuilding the exe,
+  so you don't hit "file in use" when the app is still open. It only acts on an
+  instance launched from the build directory — a copy running from anywhere else
+  is left alone. The app now listens on a named shutdown event and exits through
+  the normal clean-shutdown path.
+
 ## [1.0.2] - 2026-11-12
 
 ### Changed

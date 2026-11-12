@@ -28,6 +28,7 @@ namespace TrayHostMon
         private AddHostForm _addForm;
         private bool _paused;
         private bool _exited;
+        private EventWaitHandle _shutdownSignal;
 
         public TrayApp()
         {
@@ -76,6 +77,13 @@ namespace TrayHostMon
             StateLog.Write("TrayHostMon", "START", null);
             LoadAndStart();
             if (_config.Skipped.Count > 0) ShowSkippedNotice();
+
+            // External shutdown handshake: a named event lets build.cmd ask this
+            // instance to exit cleanly. Marshalled onto the UI thread like OnStateChanged.
+            _shutdownSignal = new EventWaitHandle(false, EventResetMode.AutoReset,
+                "Local\\TrayHostMon.Shutdown");
+            ThreadPool.RegisterWaitForSingleObject(_shutdownSignal,
+                (state, timedOut) => _ui.Post(o => ExitApp(), null), null, -1, true);
         }
 
         private void OnSessionEnding(object sender, SessionEndingEventArgs e)
@@ -550,6 +558,7 @@ namespace TrayHostMon
             {
                 SystemEvents.SessionEnding -= OnSessionEnding;
                 _lifetime.Dispose();
+                if (_shutdownSignal != null) _shutdownSignal.Dispose();
                 _tray.Dispose();
                 _menu.Dispose();
             }

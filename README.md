@@ -50,7 +50,8 @@ build.cmd
 
 That's it — the script calls `csc.exe` directly, so you don't need a full SDK. It
 also rebuilds the tray icon from the same drawing code the app uses at runtime
-(see `tools/`). The result is `TrayHostMon.exe`.
+(see `tools/`). If a copy is already running from this folder, the script stops
+it first so it can overwrite the exe. The result is `TrayHostMon.exe`.
 
 ## Using it
 
