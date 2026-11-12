@@ -15,10 +15,10 @@ using System.Threading;
 // Kept in tools\ on purpose so build.cmd's `*.cs` glob does not compile it into
 // the app. Standalone: no project deps.
 //
-//   shutdown.exe
+//   stopinstance.exe
 //     Exit 0  = nothing to stop, not our instance, or stopped cleanly
 //     Exit 1  = our instance was found but did not exit in time
-static class ShutdownInstance
+static class StopInstance
 {
     private const string EventName = "Local\\TrayHostMon.Shutdown";
     private const int WaitMs = 10000;
