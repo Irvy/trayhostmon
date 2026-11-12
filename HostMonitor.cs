@@ -1,9 +1,10 @@
 using System;
 using System.Net.NetworkInformation;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace PingMon
+namespace TrayHostMon
 {
     public class HostMonitor
     {
@@ -52,7 +53,12 @@ namespace PingMon
                 {
                     using (var ping = new Ping())
                     {
-                        PingReply reply = await ping.SendPingAsync(_host.Cfg.Address, _host.Cfg.TimeoutMs);
+                        byte[] buffer = _host.Cfg.Buffer > 0
+                            ? Encoding.ASCII.GetBytes(new string('a', _host.Cfg.Buffer))
+                            : null;
+                        PingReply reply = buffer != null
+                            ? await ping.SendPingAsync(_host.Cfg.Address, _host.Cfg.TimeoutMs, buffer)
+                            : await ping.SendPingAsync(_host.Cfg.Address, _host.Cfg.TimeoutMs);
                         ok = reply.Status == IPStatus.Success;
                         if (ok) rtt = reply.RoundtripTime;
                     }

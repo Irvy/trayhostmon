@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace PingMon
+namespace TrayHostMon
 {
     public class WidgetForm : Form
     {
@@ -11,6 +11,9 @@ namespace PingMon
         private const int Pad = 8;
         private const int HeaderHeight = 18;
         private const int WM_NCHITTEST = 0x0084;
+        private const int WM_NCLBUTTONDBLCLK = 0x00A0;
+        private const int WM_SYSCOMMAND = 0x0112;
+        private const int SC_MAXIMIZE = 0xF030;
         private const int HTCLIENT = 1;
         private const int HTCAPTION = 2;
         private const int RemoveWidth = 14;
@@ -28,6 +31,8 @@ namespace PingMon
 
         // Raised when the user clicks the remove button of a row.
         public event Action<HostState> RemoveRequested;
+        // Raised when the user toggles enable/disable for a host.
+        public event Action<HostState> ToggleEnabledRequested;
 
         public WidgetForm(List<HostState> states, bool paused)
         {
@@ -92,6 +97,17 @@ namespace PingMon
             return p.X >= Pad && p.X <= Pad + RemoveWidth;
         }
 
+        // The state dot sits just right of the remove button, at (Pad + RowIndent, rowTop + 5), 10x10.
+        private bool OnStateDot(Point p)
+        {
+            int row = RowAt(p);
+            if (row < 0) return false;
+            int top = Pad + (_paused ? HeaderHeight : 0) + row * RowHeight;
+            Rectangle r = new Rectangle(Pad + RowIndent, top + 5, 10, 10);
+            r.Inflate(2, 2); // small margin for easier clicking
+            return r.Contains(p);
+        }
+
         private void UpdateHover(Point p)
         {
             int row = RowAt(p);
@@ -107,9 +123,18 @@ namespace PingMon
         {
             if (e.Button != MouseButtons.Left) return;
             int row = RowAt(e.Location);
-            if (row < 0 || !OnRemoveButton(e.Location)) return;
-            var handler = RemoveRequested;
-            if (handler != null) handler(_states[row]);
+            if (row < 0) return;
+
+            if (OnRemoveButton(e.Location))
+            {
+                var handler = RemoveRequested;
+                if (handler != null) handler(_states[row]);
+            }
+            else if (OnStateDot(e.Location))
+            {
+                var toggleHandler = ToggleEnabledRequested;
+                if (toggleHandler != null) toggleHandler(_states[row]);
+            }
         }
 
         // Recalculates the size after the host list changed, keeping the top-left corner.
@@ -119,17 +144,42 @@ namespace PingMon
             Invalidate();
         }
 
-        // Makes the whole window draggable with the left button (acts as a title bar).
-        // The remove-button column stays clickable; the rest of the window acts as a title bar.
+        // The header (when paused) and padding stay draggable (act as a title bar);
+        // the remove button and state dot are clickable; the rest of the row drags.
         protected override void WndProc(ref Message m)
         {
+            // A double-click on the caption area would maximize a borderless window.
+            // Swallow it so the widget can only be moved, never maximized.
+            if (m.Msg == WM_NCLBUTTONDBLCLK && (int)m.WParam == HTCAPTION)
+                return;
+
+            // Second guard: reject any maximize system command outright.
+            if (m.Msg == WM_SYSCOMMAND && ((int)m.WParam & 0xFFF0) == SC_MAXIMIZE)
+                return;
+
             base.WndProc(ref m);
             if (m.Msg == WM_NCHITTEST && m.Result == (IntPtr)HTCLIENT)
             {
                 Point p = PointToClient(new Point((int)m.LParam & 0xFFFF, ((int)m.LParam >> 16) & 0xFFFF));
-                if (!(RowAt(p) >= 0 && OnRemoveButton(p)))
+                if (RowAt(p) < 0 || (!OnRemoveButton(p) && !OnStateDot(p)))
                     m.Result = (IntPtr)HTCAPTION;
             }
+        }
+
+        // Removes WS_MAXIMIZEBOX and WS_THICKFRAME so Windows can never maximize
+        // or resize the borderless widget, even via the caption double-click path.
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            IntPtr hwnd = Handle;
+            long style = IntPtr.Size == 8
+                ? (long)NativeMethods.GetWindowLongPtr64(hwnd, NativeMethods.GWL_STYLE)
+                : NativeMethods.GetWindowLong32(hwnd, NativeMethods.GWL_STYLE);
+            style &= ~(long)(NativeMethods.WS_MAXIMIZEBOX | NativeMethods.WS_THICKFRAME);
+            if (IntPtr.Size == 8)
+                NativeMethods.SetWindowLongPtr64(hwnd, NativeMethods.GWL_STYLE, new IntPtr(style));
+            else
+                NativeMethods.SetWindowLong32(hwnd, NativeMethods.GWL_STYLE, (int)style);
         }
 
         protected override void OnMove(EventArgs e)
@@ -200,16 +250,18 @@ namespace PingMon
                     Brush xBrush = (row == _hoverRow) ? red : dim;
                     g.DrawString("\u00d7", font, xBrush, Pad, y - 2);
 
-                    Color dotColor = _paused ? Color.FromArgb(90, 90, 90) : DotColor(h);
+                    // Dim disabled hosts similar to paused state
+                    bool hostDimmed = _paused || !h.Enabled;
+                    Color dotColor = hostDimmed ? Color.FromArgb(90, 90, 90) : DotColor(h);
                     using (var dot = new SolidBrush(dotColor))
                         g.FillEllipse(dot, Pad + RowIndent, y + 5, 10, 10);
 
-                    Brush text = _paused ? dim : white;
-                    Brush sub = _paused ? dim : grey;
+                    Brush text = hostDimmed ? dim : white;
+                    Brush sub = hostDimmed ? dim : grey;
                     g.DrawString(h.Cfg.Address, font, text, Pad + RowIndent + 16, y);
                     string rtt = h.LastRttMs < 0 ? "\u2014" : h.LastRttMs + " ms";
                     g.DrawString(rtt, font, sub, Pad + RowIndent + 160, y);
-                    g.DrawString(StatusText(h, _paused), font, sub, Pad + RowIndent + 230, y);
+                    g.DrawString(StatusText(h, _paused, !h.Enabled), font, sub, Pad + RowIndent + 230, y);
 
                     y += RowHeight;
                     row++;
@@ -236,8 +288,9 @@ namespace PingMon
             }
         }
 
-        private static string StatusText(HostState h, bool paused)
+        private static string StatusText(HostState h, bool paused, bool disabled)
         {
+            if (disabled) return "disabled";
             if (!paused) return StateWord(h);
             string asOf = h.LastCheck == DateTime.MinValue ? "\u2014" : h.LastCheck.ToString("HH:mm:ss");
             return StateWord(h) + " \u00b7 as of " + asOf;

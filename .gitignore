@@ -1,10 +1,4 @@
-pingmon.exe
-tools/pingmon.ico
-tools/makeicon.exe
-pingmon.ini
-pingmon.log
-pingmon-console.exe
-TrayHostMon.exe
-TrayHostMon.ico
-TrayHostMon.ini
-TrayHostMon.log
+**/*.exe
+**/*.ico
+*.log
+*.ini

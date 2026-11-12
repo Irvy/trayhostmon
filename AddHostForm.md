@@ -1,14 +1,24 @@
 # AddHostForm.cs
 
-Dialog for adding a host to the running list.
+Dialog for adding a host to the running list and editing settings.
 
 ## Class `AddHostForm : Form`
-- Constructor `AddHostForm(Func<string, bool> isListed)`: `isListed` tells whether an address is already in the running list.
+- Constructor: `AddHostForm(Func<string, bool> isListed, int currentInterval = 5, int currentTimeout = 1000, int currentBuffer = 32)`
+  - `isListed` tells whether an address is already in the running list.
+  - `currentInterval`, `currentTimeout`, `currentBuffer` are the current settings to display.
 - `List<string> Hosts`: new hosts accepted by OK (normalized, no duplicates).
 - `List<string> AlreadyListed`: valid entries that were already listed.
+- `int? IntervalSec`, `int? TimeoutMs`, `int? Buffer`: setting values (null means unchanged from current).
 - Input is split on spaces, commas, semicolons or tabs. Each entry is checked with `Config.TryNormalizeHost`.
-- OK (or Enter) messages, and the dialog stays open:
-  - nothing entered: `enter at least one IP or hostname`
-  - any invalid entries: `invalid: <entries>` (nothing is added)
-  - all valid entries already listed: `already in list: <hosts>`
-- OK with at least one new host closes the dialog. Cancel or Esc closes without adding.
+- Settings inputs (compact row of three below the host input, each with a label beneath):
+  - `period` — Ping interval (seconds): 1-3600, default 5
+  - `timeout` — Timeout (ms): 500-10000, default 1000
+  - `size` — Payload size (bytes): 0-65500, default 32 (0 = use system default)
+- The OK button sits at the right edge, in line with the settings input row. There is no Cancel button; close the window (X) to cancel. `OK` is the accept button.
+- OK (or Enter) validates settings and messages, and the dialog stays open:
+  - invalid interval/timeout/buffer: shows validation error
+  - hosts entered but all are invalid: `invalid: <entries>` (nothing is added)
+  - hosts entered but all valid entries already listed: `already in list: <hosts>`
+- OK with at least one new host closes the dialog.
+- OK with no hosts but with changed settings: closes the dialog with settings only.
+- Cancel or Esc closes without adding/applying changes.

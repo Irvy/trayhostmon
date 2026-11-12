@@ -1,6 +1,6 @@
 # tools\MakeIcon.cs
 
-Standalone build-time helper that renders pingmon tray-state circles into an
+Standalone build-time helper that renders TrayHostMon tray-state circles into an
 `.ico` file. It reuses the **exact** drawing from `IconFactory.cs` (`Make`):
 transparent background, anti-aliased filled ellipse plus a `rgb(60,60,60)`
 outline. At size 16 the geometry is identical (margin 1, diameter 13, pen 1).
@@ -24,7 +24,7 @@ makeicon.exe [state] [out.ico] [sizes]
   - `downunacked` red     `rgb(218,54,51)`   (down, not acknowledged)
   - `downacked`   orange  `rgb(227,140,26)`  (down, acknowledged)
   - `paused`      grey    `rgb(140,140,140)`
-- `out.ico` (default `pingmon.ico`, relative to the current directory)
+- `out.ico` (default `TrayHostMon.ico`, relative to the current directory)
 - `sizes` (default `16,32,48`): comma-separated pixel sizes, 1..256.
   Each size is drawn with the same scaled geometry.
 
@@ -33,11 +33,11 @@ makeicon.exe [state] [out.ico] [sizes]
 ```
 set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 "%CSC%" /nologo /target:exe /out:tools\makeicon.exe tools\MakeIcon.cs /r:System.dll /r:System.Drawing.dll
-tools\makeicon.exe allup pingmon.ico
+tools\makeicon.exe allup TrayHostMon.ico
 ```
 
-The resulting `pingmon.ico` is embedded into `pingmon.exe` by `build.cmd`
-(`/win32icon:pingmon.ico`). Re-run with another `state` (and/or `sizes`) to
+The resulting `TrayHostMon.ico` is embedded into `TrayHostMon.exe` by `build.cmd`
+(`/win32icon:TrayHostMon.ico`). Re-run with another `state` (and/or `sizes`) to
 produce additional icons later, e.g. `tools\makeicon.exe downunacked down.ico`.
 
 Note: 256 is allowed but stored as an uncompressed BMP, which adds ~256 KB to

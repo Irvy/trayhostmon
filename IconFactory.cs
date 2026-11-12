@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 
-namespace PingMon
+namespace TrayHostMon
 {
     public static class IconFactory
     {

@@ -2,12 +2,12 @@ using System;
 using System.IO;
 using System.Text;
 
-namespace PingMon
+namespace TrayHostMon
 {
     public static class StateLog
     {
         public static readonly string Path =
-            System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "pingmon.log");
+            System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TrayHostMon.log");
 
         private static readonly object Gate = new object();
         private const string Header = "timestamp,host,transition,duration";

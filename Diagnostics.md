@@ -7,5 +7,5 @@ Memory diagnostics, compiled into the main build (`build.cmd` defines `DEBUG_MEM
 - `string ForceCleanup()`: takes a snapshot, runs a full GC with finalizer wait, takes another snapshot, and returns both as text.
 
 ## Use
-- Build with `build.cmd`, which writes `pingmon.exe`.
+- Build with `build.cmd`, which writes `TrayHostMon.exe`.
 - Shift+click or right-click the tray menu's About... item. A small debug form opens with "Memory info" and "Force cleanup"; results show in a message box.

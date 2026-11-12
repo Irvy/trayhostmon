@@ -2,12 +2,12 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices;
 
-namespace PingMon
+namespace TrayHostMon
 {
     public static class Autostart
     {
         public static readonly string LinkPath =
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Startup), "pingmon.lnk");
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Startup), "TrayHostMon.lnk");
 
         public static bool IsEnabled
         {
