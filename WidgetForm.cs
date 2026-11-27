@@ -23,6 +23,7 @@ namespace TrayHostMon
         private readonly List<HostState> _states;
         private readonly Timer _timer;
         private readonly bool _paused;
+        private bool _keepOpen;
         private readonly Timer _outsideTimer;
         private int _hoverRow = -1;
 
@@ -31,13 +32,14 @@ namespace TrayHostMon
 
         // Raised when the user clicks the remove button of a row.
         public event Action<HostState> RemoveRequested;
-        // Raised when the user toggles enable/disable for a host.
-        public event Action<HostState> ToggleEnabledRequested;
+        // Raised when the user clicks a host's state dot.
+        public event Action<HostState> StateDotClicked;
 
-        public WidgetForm(List<HostState> states, bool paused)
+        public WidgetForm(List<HostState> states, bool paused, bool keepOpen)
         {
             _states = states;
             _paused = paused;
+            _keepOpen = keepOpen;
 
             FormBorderStyle = FormBorderStyle.None;
             TopMost = true;
@@ -59,7 +61,7 @@ namespace TrayHostMon
             _outsideTimer.Tick += (s, e) => CheckOutsideClick();
             _outsideTimer.Start();
 
-            Deactivate += (s, e) => Close();
+            Deactivate += (s, e) => { if (!_keepOpen) Close(); };
             KeyDown += (s, e) => { if (e.KeyCode == Keys.Escape) Close(); };
             MouseMove += (s, e) => UpdateHover(e.Location);
             MouseLeave += (s, e) => { _hoverRow = -1; Invalidate(); };
@@ -74,9 +76,15 @@ namespace TrayHostMon
             NativeMethods.SetForegroundWindow(hwnd);
         }
 
+        // Applies a menu change immediately when the widget is already visible.
+        public void SetKeepOpen(bool keepOpen)
+        {
+            _keepOpen = keepOpen;
+        }
+
         private void CheckOutsideClick()
         {
-            if (!Visible || IsDisposed) return;
+            if (_keepOpen || !Visible || IsDisposed) return;
             bool down = (NativeMethods.GetAsyncKeyState(0x01) & 0x8000) != 0
                      || (NativeMethods.GetAsyncKeyState(0x02) & 0x8000) != 0;
             if (!down) return;
@@ -132,8 +140,8 @@ namespace TrayHostMon
             }
             else if (OnStateDot(e.Location))
             {
-                var toggleHandler = ToggleEnabledRequested;
-                if (toggleHandler != null) toggleHandler(_states[row]);
+                var handler = StateDotClicked;
+                if (handler != null) handler(_states[row]);
             }
         }
 
@@ -298,14 +306,18 @@ namespace TrayHostMon
 
         private static string StateWord(HostState h)
         {
-            if (h.State == State.Up) return "up";
+            if (h.State == State.Up)
+                return h.Recovered ? "back since " + FormatTime(h.Since) : "up";
             if (h.State == State.Unknown) return "unknown";
 
-            DateTime since = h.Since;
-            string when = since.Date == DateTime.Today
-                ? since.ToString("HH:mm")
-                : since.ToString("dd.MM HH:mm");
-            return "down since " + when + (h.Acked ? " (ack)" : "");
+            return "down since " + FormatTime(h.Since) + (h.Acked ? " (ack)" : "");
+        }
+
+        private static string FormatTime(DateTime time)
+        {
+            return time.Date == DateTime.Today
+                ? time.ToString("HH:mm")
+                : time.ToString("dd.MM HH:mm");
         }
 
         protected override void Dispose(bool disposing)

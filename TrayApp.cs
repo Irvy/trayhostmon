@@ -17,8 +17,14 @@ namespace TrayHostMon
         private readonly ToolStripMenuItem _ackItem;
         private readonly ToolStripMenuItem _autostartItem;
         private readonly ToolStripMenuItem _pauseItem;
+        private readonly ToolStripMenuItem _notifyDownItem;
+        private readonly ToolStripMenuItem _notifyUpItem;
+        private readonly ToolStripMenuItem _keepWidgetOpenItem;
+        private readonly System.Threading.Timer _notificationTimer;
         private readonly List<HostState> _states = new List<HostState>();
         private readonly Dictionary<HostState, HostMonitor> _monitors = new Dictionary<HostState, HostMonitor>();
+        private readonly List<string> _pendingDownNotifications = new List<string>();
+        private readonly List<string> _pendingUpNotifications = new List<string>();
         private readonly SynchronizationContext _ui;
         private readonly CancellationTokenSource _lifetime = new CancellationTokenSource();
         private AppConfig _config = new AppConfig();
@@ -28,6 +34,8 @@ namespace TrayHostMon
         private AddHostForm _addForm;
         private bool _paused;
         private bool _exited;
+        private bool _notificationFlushScheduled;
+        private DateTime _lastNotificationAt = DateTime.MinValue;
         private EventWaitHandle _shutdownSignal;
 
         public TrayApp()
@@ -37,10 +45,16 @@ namespace TrayHostMon
             _ackItem = new ToolStripMenuItem("Acknowledge all", null, (s, e) => AcknowledgeAll());
             _pauseItem = new ToolStripMenuItem("Pause monitoring", null, (s, e) => TogglePause());
             _autostartItem = new ToolStripMenuItem("Start with Windows", null, (s, e) => ToggleAutostart());
+            _notifyDownItem = new ToolStripMenuItem("Notify down", null, (s, e) => ToggleNotifyDown());
+            _notifyUpItem = new ToolStripMenuItem("Notify up", null, (s, e) => ToggleNotifyUp());
+            _keepWidgetOpenItem = new ToolStripMenuItem("Keep widget open", null, (s, e) => ToggleKeepWidgetOpen());
             var clearLogItem = new ToolStripMenuItem("Clear log", null, (s, e) => ClearLog());
             _menu = new ContextMenuStrip();
             _menu.Items.Add(_ackItem);
             _menu.Items.Add(_pauseItem);
+            _menu.Items.Add(_notifyDownItem);
+            _menu.Items.Add(_notifyUpItem);
+            _menu.Items.Add(_keepWidgetOpenItem);
             _menu.Items.Add("Add host...", null, (s, e) => AddHost());
             _menu.Items.Add("Open log", null, (s, e) => OpenLog());
             _menu.Items.Add(clearLogItem);
@@ -58,6 +72,9 @@ namespace TrayHostMon
                 _ackItem.Enabled = !_paused && HasUnackedDown();
                 _pauseItem.Text = _paused ? "Resume monitoring" : "Pause monitoring";
                 _autostartItem.Checked = Autostart.IsEnabled;
+                _notifyDownItem.Checked = _config.NotifyDown;
+                _notifyUpItem.Checked = _config.NotifyUp;
+                _keepWidgetOpenItem.Checked = _config.KeepWidgetOpen;
                 clearLogItem.Enabled = File.Exists(StateLog.Path);
             };
 
@@ -70,6 +87,9 @@ namespace TrayHostMon
             {
                 if (e.Button == MouseButtons.Left) ToggleWidget();
             };
+            _notificationTimer = new System.Threading.Timer(
+                state => _ui.Post(o => FlushNotifications(), null), null,
+                Timeout.Infinite, Timeout.Infinite);
 
             SystemEvents.SessionEnding += OnSessionEnding;
 
@@ -151,12 +171,13 @@ namespace TrayHostMon
         }
 
         // Called on a background thread: marshal to the UI thread.
-        private void OnStateChanged(HostState h, State oldState, TimeSpan duration)
+        private void OnStateChanged(HostState h, State oldState, State newState, TimeSpan duration)
         {
             _ui.Post(_ =>
             {
-                StateLog.Write(h.Cfg.Address, oldState + "->" + h.State,
+                StateLog.Write(h.Cfg.Address, oldState + "->" + newState,
                     oldState == State.Unknown ? (TimeSpan?)null : duration);
+                QueueNotification(h, oldState, newState);
                 Refresh();
             }, null);
         }
@@ -219,6 +240,102 @@ namespace TrayHostMon
             Refresh();
         }
 
+        private void ToggleNotifyDown()
+        {
+            _config.NotifyDown = !_config.NotifyDown;
+            SaveConfig();
+        }
+
+        private void ToggleNotifyUp()
+        {
+            _config.NotifyUp = !_config.NotifyUp;
+            SaveConfig();
+        }
+
+        private void ToggleKeepWidgetOpen()
+        {
+            _config.KeepWidgetOpen = !_config.KeepWidgetOpen;
+            if (_widget != null && !_widget.IsDisposed)
+                _widget.SetKeepOpen(_config.KeepWidgetOpen);
+            SaveConfig();
+        }
+
+        // Combines selected transitions into one tray balloon over a five-second window.
+        private void QueueNotification(HostState h, State oldState, State newState)
+        {
+            if (_paused || !h.Enabled) return;
+
+            if (newState == State.Down && _config.NotifyDown)
+            {
+                _pendingDownNotifications.Add(h.Cfg.Address);
+                StateLog.Write(h.Cfg.Address, "NOTIFY DOWN QUEUED", null);
+            }
+            else if (oldState == State.Down && newState == State.Up && _config.NotifyUp)
+            {
+                _pendingUpNotifications.Add(h.Cfg.Address);
+                StateLog.Write(h.Cfg.Address, "NOTIFY UP QUEUED", null);
+            }
+            else
+                return;
+
+            ScheduleNotificationFlush();
+        }
+
+#if DEBUG_MEM
+        private void QueueTestNotification()
+        {
+            _pendingDownNotifications.Add("test-down");
+            _pendingUpNotifications.Add("test-up");
+            StateLog.Write("TrayHostMon", "TEST NOTIFY QUEUED", null);
+            ScheduleNotificationFlush();
+        }
+#endif
+
+        // The first alert waits one second to collect simultaneous state changes.
+        // Later alerts wait until five seconds after the previous one was shown.
+        private void ScheduleNotificationFlush()
+        {
+            if (_notificationFlushScheduled) return;
+
+            int delayMs = 1000;
+            if (_lastNotificationAt != DateTime.MinValue)
+            {
+                double remaining = 5000 - (DateTime.Now - _lastNotificationAt).TotalMilliseconds;
+                if (remaining > 0) delayMs = Math.Max(1, (int)Math.Ceiling(remaining));
+            }
+
+            _notificationFlushScheduled = true;
+            _notificationTimer.Change(delayMs, Timeout.Infinite);
+        }
+
+        private void FlushNotifications()
+        {
+            _notificationFlushScheduled = false;
+            if (_exited) return;
+            if (_pendingDownNotifications.Count == 0 && _pendingUpNotifications.Count == 0) return;
+
+            if (_lastNotificationAt != DateTime.MinValue &&
+                (DateTime.Now - _lastNotificationAt).TotalMilliseconds < 5000)
+            {
+                ScheduleNotificationFlush();
+                return;
+            }
+
+            var lines = new List<string>();
+            if (_pendingDownNotifications.Count > 0)
+                lines.Add("Down: " + string.Join(", ", _pendingDownNotifications.ToArray()));
+            if (_pendingUpNotifications.Count > 0)
+                lines.Add("Up: " + string.Join(", ", _pendingUpNotifications.ToArray()));
+            _pendingDownNotifications.Clear();
+            _pendingUpNotifications.Clear();
+
+            string text = string.Join("\r\n", lines.ToArray());
+            if (text.Length > 255) text = text.Substring(0, 252) + "...";
+            StateLog.Write("TrayHostMon", "NOTIFY FLUSHED", null);
+            _lastNotificationAt = DateTime.Now;
+            ShowBalloon(text);
+        }
+
         private void OpenLog()
         {
             if (!File.Exists(StateLog.Path)) return;
@@ -264,6 +381,8 @@ namespace TrayHostMon
             _states.Clear();
 
             _config = fresh;
+            if (_widget != null && !_widget.IsDisposed)
+                _widget.SetKeepOpen(_config.KeepWidgetOpen);
             foreach (var hostSpec in fresh.Hosts)
             {
                 string address = Config.GetAddress(hostSpec);
@@ -388,7 +507,7 @@ namespace TrayHostMon
             {
                 owner.Show();
                 MessageBox.Show(owner,
-                    "TrayHostMon\r\nA simple tray host ping monitor\r\nMade by Claude/Deepseek/Cline and Irvy in 2026",
+                    "TrayHostMon " + Program.Version + "\r\nA simple tray host ping monitor\r\nMade by Claude, DeepSeek, Cline, Terra and Irvy in 2026",
                     "About TrayHostMon",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
@@ -416,7 +535,7 @@ namespace TrayHostMon
             if (e.Button == MouseButtons.Right) ShowDebugForm();
         }
 
-        // Debug build only: memory figures for the running process, plus a forced cleanup.
+        // Debug build only: diagnostics and notification test actions.
         private void ShowDebugForm()
         {
             if (_debugFormOpen) return;
@@ -437,16 +556,22 @@ namespace TrayHostMon
                 MaximizeBox = false,
                 MinimizeBox = false,
                 ShowInTaskbar = false,
-                ClientSize = new Size(220, 80)
+                ClientSize = new Size(220, 115)
             })
             {
                 var mem = new Button { Text = "Memory info", Location = new Point(12, 12), Width = 95, Height = 27 };
                 var force = new Button { Text = "Force cleanup", Location = new Point(12, 45), Width = 95, Height = 27 };
-                var close = new Button { Text = "Close", Location = new Point(133, 45), Width = 75, Height = 27, DialogResult = DialogResult.Cancel };
+                var testBalloon = new Button { Text = "Test balloon", Location = new Point(113, 12), Width = 95, Height = 27 };
+                var testGrouped = new Button { Text = "Test grouped", Location = new Point(113, 45), Width = 95, Height = 27 };
+                var close = new Button { Text = "Close", Location = new Point(133, 78), Width = 75, Height = 27, DialogResult = DialogResult.Cancel };
                 mem.Click += (s, e) => MessageBox.Show(dlg, Diagnostics.Snapshot(), "TrayHostMon - memory", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 force.Click += (s, e) => MessageBox.Show(dlg, Diagnostics.ForceCleanup(), "TrayHostMon - memory", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                testBalloon.Click += (s, e) => ShowBalloon("Tray notification test. If this does not appear, Windows is suppressing tray balloons.");
+                testGrouped.Click += (s, e) => QueueTestNotification();
                 dlg.Controls.Add(mem);
                 dlg.Controls.Add(force);
+                dlg.Controls.Add(testBalloon);
+                dlg.Controls.Add(testGrouped);
                 dlg.Controls.Add(close);
                 dlg.CancelButton = close;
                 owner.Show();
@@ -503,9 +628,9 @@ namespace TrayHostMon
             // Ignore the click that closed the widget (focus loss closes it first).
             if ((DateTime.Now - _widgetClosedAt).TotalMilliseconds < 300) return;
 
-            _widget = new WidgetForm(_states, _paused);
+            _widget = new WidgetForm(_states, _paused, _config.KeepWidgetOpen);
             _widget.RemoveRequested += RemoveHost;
-            _widget.ToggleEnabledRequested += ToggleHostEnabled;
+            _widget.StateDotClicked += OnStateDotClicked;
             _widget.FormClosed += OnWidgetClosed;
             _widget.PlaceAt(_config.WidgetPos);
             _widget.Show();
@@ -521,6 +646,19 @@ namespace TrayHostMon
             {
                 _config.WidgetPos = w.Location;
                 SaveConfig();
+            }
+        }
+
+        private void OnStateDotClicked(HostState st)
+        {
+            if (st.State == State.Down && !st.Acked)
+            {
+                st.Acked = true;
+                Refresh();
+            }
+            else
+            {
+                ToggleHostEnabled(st);
             }
         }
 
@@ -548,6 +686,9 @@ namespace TrayHostMon
             StopMonitors();
             StateLog.Write("TrayHostMon", _paused ? "STOP (paused)" : "STOP", null);
             if (_widget != null && !_widget.IsDisposed) _widget.Close();
+            // Persist the complete running configuration on every clean exit. This
+            // also writes defaults for settings introduced by a newer app version.
+            SaveConfig();
             _tray.Visible = false;
             ExitThread();
         }
@@ -559,6 +700,7 @@ namespace TrayHostMon
                 SystemEvents.SessionEnding -= OnSessionEnding;
                 _lifetime.Dispose();
                 if (_shutdownSignal != null) _shutdownSignal.Dispose();
+                _notificationTimer.Dispose();
                 _tray.Dispose();
                 _menu.Dispose();
             }

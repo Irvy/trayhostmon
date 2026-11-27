@@ -22,6 +22,9 @@ namespace TrayHostMon
         public int TimeoutMs = 1000;
         public int Threshold = 3;
         public int Buffer = 32;
+        public bool NotifyDown;
+        public bool NotifyUp;
+        public bool KeepWidgetOpen;
         public List<string> Hosts = new List<string>();
         public Point? WidgetPos;
         // Host lines from the file that were ignored when loading.
@@ -56,6 +59,9 @@ namespace TrayHostMon
             sb.Append("timeout=").Append(cfg.TimeoutMs).Append("\r\n");
             sb.Append("threshold=").Append(cfg.Threshold).Append("\r\n");
             sb.Append("buffer=").Append(cfg.Buffer).Append("\r\n");
+            sb.Append("notify_down=").Append(cfg.NotifyDown ? "true" : "false").Append("\r\n");
+            sb.Append("notify_up=").Append(cfg.NotifyUp ? "true" : "false").Append("\r\n");
+            sb.Append("keep_widget_open=").Append(cfg.KeepWidgetOpen ? "true" : "false").Append("\r\n");
             sb.Append("\r\n");
             sb.Append("[hosts]\r\n");
             foreach (string h in cfg.Hosts) sb.Append(h).Append("\r\n");
@@ -177,6 +183,9 @@ namespace TrayHostMon
             cfg.TimeoutMs = Clamp(Get(settings, "timeout", 1000), 500, 10000);
             cfg.Threshold = Clamp(Get(settings, "threshold", 3), 1, 100);
             cfg.Buffer = Clamp(Get(settings, "buffer", 32), 0, 65500);
+            cfg.NotifyDown = GetBool(settings, "notify_down", false);
+            cfg.NotifyUp = GetBool(settings, "notify_up", false);
+            cfg.KeepWidgetOpen = GetBool(settings, "keep_widget_open", false);
             return cfg;
         }
 
@@ -226,6 +235,14 @@ namespace TrayHostMon
             string v;
             int n;
             if (settings.TryGetValue(key, out v) && int.TryParse(v, out n)) return n;
+            return fallback;
+        }
+
+        private static bool GetBool(Dictionary<string, string> settings, string key, bool fallback)
+        {
+            string v;
+            bool b;
+            if (settings.TryGetValue(key, out v) && bool.TryParse(v, out b)) return b;
             return fallback;
         }
 

@@ -2,12 +2,23 @@
 
 Reads `TrayHostMon.ini` (next to the exe).
 
+## Compatibility rule
+
+All releases within the same major version must load valid INI files written by
+earlier releases. When adding a setting, make it optional on read and provide a
+safe default if it is absent; never require a user to recreate or manually migrate
+their existing configuration.
+
+On every clean exit, the app rewrites the complete running configuration. This
+preserves existing values and hosts while adding default values for any settings
+introduced by a newer compatible release.
+
 ## Classes
 - `HostConfig`: `Address`, `IntervalSec`, `TimeoutMs`, `Threshold`, `Buffer` (ping payload size in bytes). All hosts share the same settings.
 - `Config` (static):
   - `IniPath`: full path to `TrayHostMon.ini`.
   - `EnsureExists()`: writes a sample ini if none exists.
-  - `Load(string path)`: returns `AppConfig`. Reads `[settings]` (interval, timeout, threshold, buffer; clamped to 1-3600, 500-10000, 1-100, 0-65500; defaults 5, 1000, 3, 32), `[hosts]` (one address per line, optional leading `-` means disabled) and `[widget]` (x, y). Invalid and duplicate host lines go to `Skipped`.
+  - `Load(string path)`: returns `AppConfig`. Reads `[settings]` (interval, timeout, threshold, buffer, `notify_down`, `notify_up`, `keep_widget_open`; missing booleans default to false), `[hosts]` (one address per line, optional leading `-` means disabled) and `[widget]` (x, y). Invalid and duplicate host lines go to `Skipped`.
 - `static bool TryNormalizeHost(string input, out string host)`: the single IP-or-hostname check, used by config loading and the Add host dialog. Trims and lowercases. Digits-and-dots input must be a complete IPv4 address. Anything else must be a hostname (letters, digits, hyphens, underscores; dot-separated labels, max 253 chars).
 - `static void Save(string path, AppConfig cfg)`: writes the whole file from the running values (header comment, `[settings]`, `[hosts]`, `[widget]` if a position is known). CRLF, UTF-8 without BOM. Writes a `.tmp` file first, then swaps it in.
 - `static void EnsureExists()`: writes defaults if the file is missing.
@@ -26,6 +37,9 @@ interval=5
 timeout=1000
 threshold=3
 buffer=32
+notify_down=false
+notify_up=false
+keep_widget_open=false
 
 [hosts]
 127.0.0.1
@@ -47,6 +61,9 @@ interval=5
 timeout=1000
 threshold=3
 buffer=32
+notify_down=false
+notify_up=false
+keep_widget_open=false
 
 [hosts]
 127.0.0.1

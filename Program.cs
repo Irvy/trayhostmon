@@ -6,6 +6,8 @@ namespace TrayHostMon
 {
     internal static class Program
     {
+        internal const string Version = "1.1.0";
+
         [STAThread]
         private static void Main()
         {

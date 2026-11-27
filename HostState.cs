@@ -14,6 +14,7 @@ namespace TrayHostMon
         public DateTime Since = DateTime.Now;
         public DateTime LastCheck = DateTime.MinValue;
         public bool Acked;
+        public bool Recovered;
         public int FailCount;
         public long LastRttMs = -1;
         public bool Enabled = true;

@@ -9,6 +9,7 @@ Windowless tray app that monitors IPv4 connectivity of 5-10 remote hosts on Win1
 - Build: `build.cmd` runs csc.exe from Windows (C# 5 only), no SDK
 - Files: `TrayHostMon.exe`, `TrayHostMon.ini` (config), `TrayHostMon.log` (CSV), all next to the exe
 - No JSON: INI/text config
+- Configuration compatibility: releases within the same major version must continue to load every valid configuration written by earlier releases. New settings must have safe defaults when absent; do not require users to recreate or manually migrate their INI files.
 
 ## Components
 1. **Config** (`TrayHostMon.ini` next to exe): `[settings]` for interval, timeout, fail-threshold, buffer; `[hosts]` with one IP or hostname per line (optional leading `-` disables it)

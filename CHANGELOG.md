@@ -2,6 +2,25 @@
 
 All notable changes to TrayHostMon, newest first.
 
+## [1.1.0] - 2026-11-27
+
+### Added
+- Per-host acknowledgement: clicking an unacknowledged red status dot changes
+  only that host to acknowledged Down.
+- Recovery status in the widget: a host that returns from Down reads `back since`
+  with the recovery time.
+- `Notify down` and `Notify up` tray-menu options. Events within one second are
+  combined into one tray balloon, and later balloons wait at least five seconds;
+  Up alerts are recovery-only.
+- `Keep widget open` tray-menu option, which prevents focus loss and outside clicks
+  from closing the always-on-top widget.
+
+### Changed
+- The widget's non-red status dots retain the existing per-host enable/disable
+  behavior.
+- Clean exits now persist the complete running configuration, allowing a
+  same-major-version upgrade to add missing settings with their defaults.
+
 ## [1.0.3] - 2026-11-13
 
 ### Added

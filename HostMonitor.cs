@@ -11,7 +11,7 @@ namespace TrayHostMon
         private readonly HostState _host;
         private CancellationTokenSource _cts;
 
-        public event Action<HostState, State, TimeSpan> StateChanged;
+        public event Action<HostState, State, State, TimeSpan> StateChanged;
 
         public HostState Host
         {
@@ -103,10 +103,18 @@ namespace TrayHostMon
             TimeSpan duration = now - _host.Since;
             _host.State = newState;
             _host.Since = now;
-            if (newState == State.Down) _host.Acked = false;
+            if (newState == State.Down)
+            {
+                _host.Acked = false;
+                _host.Recovered = false;
+            }
+            else if (newState == State.Up)
+            {
+                _host.Recovered = old == State.Down;
+            }
 
             var handler = StateChanged;
-            if (handler != null) handler(_host, old, duration);
+            if (handler != null) handler(_host, old, newState, duration);
         }
     }
 }
